@@ -11,5 +11,6 @@ Analysis of College Scorecard data.
 5. Perform and analysis (possibly regression)
 
 College scorecard data: https://collegescorecard.ed.gov/data/
+
 Documentation Report: https://collegescorecard.ed.gov/assets/FullDataDocumentation.pdf
 
