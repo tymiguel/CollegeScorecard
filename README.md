@@ -14,3 +14,5 @@ College scorecard data: https://collegescorecard.ed.gov/data/
 
 Documentation Report: https://collegescorecard.ed.gov/assets/FullDataDocumentation.pdf
 
+Notes: Use 2-+ variables
+
