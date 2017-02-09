@@ -1,0 +1,134 @@
+Proposed Investigation
+
+testing new line add
+
+NOTES: 
+-	Data files are provided aggregated at the postsecondary institutional levels.
+-	Most of the variables are summarized at the level of undergraduate bachelor degree
+o	While there is information on higher and lower level degrees, I think it would make sense for us to narrow our scope to 4 Year Institutions and on Bachelor Degree seeking students
+-	Earnings data is only available for students who received financial aid, so we should also make a point to narrow our investigation to only considering students in this bucket if we want to assess earnings
+-	There is no earnings data based on major/program. There is simple a mean and median overall. 
+-	Receiving of financial loan data is not available prior to 2009-10 year so if we use this variable, we will need to only analyze about 7 years back — which may be a very reasonable assessment (affects PCTFLOAN and DEBT_MDN variables)
+-	Earnings data is not available post 2007 – this is because data does not become available until 6 years post graduation – thus we will need to create a separate data set for earnings by school
+o	We can trend this over the years or calculate an average “earnings” number for each university and merge a new data set with this information 
+
+INITIAL SUGGESTIONS FOR RESEARCH QUESTIONS:
+-	Do the cost of university (tuition+other associated costs) OR the acceptance rate affect the overall outcome of student graduate rate OR student earnings? 
+-	Do certain universities have more students on loans than others 
+o	does this correlate to higher earning potential?  
+o	perhaps some schools are not worth the loan amount? 
+-	What is the average debt amount per student versus average earnings  
+o	by school
+o	by year
+-	Correlation between earnings and financial aid
+-	May be interesting to see if universities with higher education available are more “successful” (earnings are higher)
+-	Interesting to see relationship between earnings/loans/etc. between schools that focus on undergraduate versus schools with a focus on graduate programs
+
+PROPOSED VARIABLES
+
+LOCATION: 
+* Note that some universities have multiple locations — need MAIN variable to identify if this is the main campus or not
+-	CITY
+-	ZIP 
+-	MAIN
+
+DEGREE/UNIVERSITY CLASSIFIERS:
+-	HIGHDEG — separate out by highest degree 
+o	May be interesting to see if universities with higher education are more “successful” 
+-	PREDDEG: ‘Predominant degree type” identifies the type of degree that the institution primarily awards
+o	Interesting to see relationship between earnings/loans/etc. between schools that focus on undergraduate versus schools with a focus on graduate programs
+-	CONTROL - string that identifies whether the institution is public, private, non-profit, private for-profit 
+-	DISTANCEONLY - boolean variable that identifies if a university is distance learning only 
+-	UGDS - # of undergraduate students 
+
+COSTS OF ATTENTANCE:
+-	TUITFTE - uses tuition revenue minus discounts and allowances - divides by total number of full time students 
+-	INEXPFTE - total expenditures without discounts - divided by total number of full time students  
+•	combination of these can be used to calculate the average discount/allowance per full time student
+-	TUITIONFEE_IN – instate
+-	TUITIONFEE_OUT - out of state
+•	could create a variable that indicates schools that do not change tuition based on in-state residency
+
+ADMISSIONS:
+-	ADM_RATE - rate at each campus
+-	ADM_RATE_ALL - across all campuses
+
+FINANCIAL AID:
+-	PCTFLOAN - share of undergraduate students who received federal loans in a given year 
+-	DEBT_MDN - sum of all undergraduate federal loans over students’ college education for 8 semesters 
+    ** at institutions where large % of students withdraw before completion, a lower median debt level could simply reflect the lack of time that a student spends at the institution – can use retention rate to look into this
+
+RETENTION RATES: 
+-	RET_FT4 - 4 year, retention rate of full time bachelor’s students
+-	RET_PTF- 4 year, retention rate of part time bachelor’s students
+
+COMPLETION RATES: 
+•	reported for full-time students who begin school in the fall semester and complete within 100 or 150 percent of the expected time to completion 
+•	excludes transfer or part time students or non-first time 
+•	Noted that First-time full-time students make up fewer than half of all college students, or even less in some sectors of institutions (e.g. community colleges). 
+-	C[100 or 150]_4 - 4 year 
+-	C[100 or 150]_L4 - less than 4 year
+-	C150_4_POOLED 
+-	C150_L4_POOLED  
+•	represents two years of data pooled together to reduce the fluctuations in year to year 
+•	I suggest that we just pull the pooled data
+
+Completion Rates for students who receive financial aid — this information is far more detailed, but we can compare it to the overall stats from completion rate for the university — I would propose that we only pull the 4 year and 6 year to compare the 100% and 150% -- If we focus on 4 year degrees, I suggest we only pull the following variables
+
+-	COMP_ORIG_YR*_RT - completed at the original institution 
+-	COMP_4YR_TRANS_YR*_RT -  transferred and completed at a four- year institution 
+-	COMP_2YR_TRANS_YR*_RT - transferred and completed at a two-year institution
+-	WDRAW_ORIG_YR*_RT - withdrew from the original institution
+-	WDRAW_4YR_TRANS_YR*_RT - transferred and withdrew from a four-year institution 
+-	WDRAW_2YR_TRANS_YR*_RT-  transferred and withdrew from a two- year institution
+-	ENRL_ORIG_YR*_RT - still enrolled at the original institution
+-	ENRL_4YR_TRANS_YR*_RT - transferred and is still enrolled at a four-year institution 
+-	ENRL_2YR_TRANS_YR*_RT - transferred and is still enrolled at a two-year institution 
+-	UNKN_ORIG_YR*_RT - status unknown at the original institution
+
+EARNINGS: 
+•	data is based solely on students receiving federal aid
+•	there is no information available about the breakdown of earnings by program type
+excludes students who attend graduate school
+•	earnings are for the institutional aggregate of all federally aided students who enroll in an institution each year and who are employed but not enrolled. Earnings are defined as the sum of wages and deferred compensation from all non-duplicate W-2 forms received for each individual, plus positive self- employment earnings from Schedule SE. Data are available for each year starting six years after a student enrolls in college, up to 10 years after the student enrolls; enrollment dates are estimated based on FAFSA self-reporting, as with the completion rate cohort construction described above.
+-	MN_EARN_WNE_P* - Mean earnings
+-	MD_EARN_WNE_P* - Median earnings 
+
+Earnings data are available for the 2005-06 and 2006-07 pooled cohorts; the 2004-05 and 2005-06 cohorts; the 2003-04 and 2004-5 pooled cohorts; the 2002-03 and 2003-04 pooled cohorts; the 2001-02 and 2002-03 pooled cohorts; the 2000-01 and 2001-02 pooled cohorts; the 1998-99 and 1999-00 pooled cohorts; and the 1995-96 and 1996-97 pooled cohorts.
+
+
+COMPLETE LIST OF PROPOSED VARIABLES: 
+-	CITY
+-	ZIP 
+-	MAIN
+-	HIGHDEG 
+-	PREDDEG
+-	CONTROL 
+-	DISTANCEONLY 
+-	UGDS
+-	TUITFTE 
+-	INEXPFTE
+-	TUITIONFEE_IN
+-	TUITIONFEE_OUT
+-	ADM_RATE
+-	ADM_RATE_ALL
+-	PCTFLOAN
+-	DEBT_MDN
+-	RET_FT4
+-	RET_PTF 
+-	C[100 or 150]_4 
+-	C[100 or 150]_L4
+-	C150_4_POOLED 
+-	C150_L4_POOLED  
+-	COMP_ORIG_YR*_RT 
+-	COMP_4YR_TRANS_YR*_RT
+-	WDRAW_ORIG_YR*_RT
+-	WDRAW_4YR_TRANS_YR*_RT
+-	ENRL_ORIG_YR*_RT 
+-	ENRL_4YR_TRANS_YR*_RT
+-	UNKN_ORIG_YR*_RT
+-	MN_EARN_WNE_P*
+-	MD_EARN_WNE_P* 
+
+DATASETS (how to merge and what to summarize on)
+
