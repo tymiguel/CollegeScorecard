@@ -1,0 +1,493 @@
+---
+title: "Assignment 2"
+author: "Katelyn Tolbert"
+date: "2/21/2017"
+output: html_document
+---
+```{r, echo=TRUE, message=FALSE,  }
+library(dplyr)
+library(readr)
+library(tidyr)
+library(plotly)
+library(ggplot2)
+library(arules)
+library(lazyeval)
+```
+
+
+```{r, message=FALSE,  }
+setwd('/Users/tylermiguel/Desktop/Bentley/Data Mining (MA710)/Assignment 1/')
+df<-read_csv("CollegeScorecard_Raw_Data/MERGED2014_15_PP.csv", 
+             na = c("","NA","NULL", "PrivacySuppressed"))
+```
+
+```{r}
+df %>%
+    select(c(Time,
+             INSTNM,
+             CITY,
+             HIGHDEG,
+             CONTROL,
+             ST_FIPS,
+             REGION,
+             CURROPER,
+             DEBT_MDN,
+             GRAD_DEBT_MDN,
+             WDRAW_DEBT_MDN,
+             LO_INC_DEBT_MDN,
+             MD_INC_DEBT_MDN,
+             HI_INC_DEBT_MDN,
+             DEP_DEBT_MDN,
+             IND_DEBT_MDN,
+             PELL_DEBT_MDN,
+             NOPELL_DEBT_MDN,
+             FEMALE_DEBT_MDN,
+             MALE_DEBT_MDN,
+             FIRSTGEN_DEBT_MDN,
+             NOTFIRSTGEN_DEBT_MDN,
+             DEBT_N,
+             GRAD_DEBT_N,
+             WDRAW_DEBT_N,
+             GRAD_DEBT_MDN10YR,
+             TUITFTE,
+             INEXPFTE,
+             HBCU,
+             PBI,
+             ANNHI,
+             TRIBAL,
+             AANAPII,
+             HSI,
+             NANTI,
+             UGDS,
+             PCTFLOAN,
+             LONGITUDE,
+             LATITUDE)) %>%
+             {.} -> df_fil
+```
+
+To make the analysis easier to follow, we renamed the variables in our data frame. Below, we assigned a new character vector to the `names(df_fil)` character vector to overwrite the current variable names.
+
+```{r}
+names(df_fil) <- c("Time", 
+                  "Institution_Name",
+                  "City",
+                  "Highest_Degree",
+                  "Public_Private",
+                  "State",
+                  "Region",
+                  "Operating_Flag",
+                  "Median_Total_Debt",	
+                  "Completed",
+                  "Withdrawn",
+                  "Zero_ThirtyK",
+                  "ThirtyK_SeventyFiveK",
+                  "SeventyFiveKplus",
+                  "Dependent",
+                  "Independent",
+                  "Pell",
+                  "notPell",
+                  "Female",
+                  "Male",
+                  "FirstGen",
+                  "NonFirstGen",
+                  "Count_Students_Debt_Cohort",
+                  "Count_Students_Completed",
+                  "Count_Students_Withdrawn",
+                  "Median_Debt_Completed_Monthly_10YR",
+                  "Net_Tuition",
+                  "Total_Cost",
+                  "Hist_Black_Flag",
+                  "Pred_Black_Flag",
+                  "Alaska_Hawaiian_Flag",
+                  "Tribal_Flag",
+                  "Asian_Native_American_Pacific_Flag",
+                  "Hispanic_Flag",
+                  "Native_NonTribal_Flag",
+                  "Undergraduate_Count",
+                  "Percent_UG_Federal_Loan",
+                  "Longitude",
+                  "Latitude")
+```
+
+We will convert our variables to factor variables using the function below.
+
+```{r}
+make.ntiles = function (inputvar, n) {
+  inputvar %>%
+    quantile(.,
+             (1/n) * 1:(n-1),
+             na.rm=TRUE) %>%
+    c(-Inf, ., Inf) %>% 
+    cut(inputvar,
+        breaks=.,
+        paste("Q", 1:n, sep="") )
+}
+
+```
+
+# trying to build function to take care of factors 
+
+```{r}
+# does not currently work
+n.apply <- function(...) {
+  cols <- list(...)
+  for (i in cols) {
+    newvar <- paste0(i,".F")
+    varval <- lazyeval::interp(~ make.ntiles(i,3), i=as.name(i))
+    mutate_(df_fil, .dots = setNames(list(varval),newvar)) -> df_2
+  }
+}
+
+```
+```{r}
+n.apply('Median_Total_Debt')
+```
+
+The one below works, so if I put in multiple column names into the args we can run it, however, I need it to work in a for loop based on any args I give it.
+
+```{r}
+# this works
+n.apply <- function(col1) {
+    newvar <- paste0(col1,".F")
+    varval <- lazyeval::interp(~ make.ntiles(i,3), i=as.name(col1))
+    df_fil %>% mutate_(.dots = setNames(list(varval),newvar))
+  }
+```
+
+
+Creating binned factors
+
+```{r output=FALSE}
+df_fil <- df_fil %>% 
+  mutate(Median_Total_Debt.F=make.ntiles(Median_Total_Debt, 3)) %>% 
+  mutate(Median_Total_Debt.F = factor(Median_Total_Debt.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Completed.F=make.ntiles(Completed, 3)) %>% 
+  mutate(Completed.F = factor(Completed.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Withdrawn.F=make.ntiles(Withdrawn, 3)) %>% 
+  mutate(Withdrawn.F = factor(Withdrawn.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Zero_ThirtyK.F=make.ntiles(Zero_ThirtyK, 3)) %>% 
+  mutate(Zero_ThirtyK.F = factor(Zero_ThirtyK.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(ThirtyK_SeventyFiveK.F=make.ntiles(ThirtyK_SeventyFiveK, 3)) %>%
+  mutate(ThirtyK_SeventyFiveK.F = factor(ThirtyK_SeventyFiveK.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(SeventyFiveKplus.F=make.ntiles(SeventyFiveKplus, 3)) %>% 
+  mutate(SeventyFiveKplus.F = factor(SeventyFiveKplus.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Dependent.F=make.ntiles(Dependent, 3)) %>% 
+  mutate(Dependent.F = factor(Dependent.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Independent.F=make.ntiles(Independent, 3)) %>% 
+  mutate(Independent.F = factor(Independent.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Pell.F=make.ntiles(Pell, 3)) %>% 
+  mutate(Pell.F = factor(Pell.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(notPell.F=make.ntiles(notPell, 3)) %>% 
+  mutate(notPell.F = factor(notPell.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Female.F=make.ntiles(Female, 3)) %>% 
+  mutate(Female.F = factor(Female.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Male.F=make.ntiles(Male, 3)) %>% 
+  mutate(Male.F = factor(Male.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(FirstGen.F=make.ntiles(FirstGen, 3)) %>% 
+  mutate(FirstGen.F = factor(FirstGen.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(NonFirstGen.F=make.ntiles(Completed, 3)) %>% 
+  mutate(NonFirstGen.F = factor(NonFirstGen.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Count_Students_Debt_Cohort.F=make.ntiles(Count_Students_Debt_Cohort, 3)) %>%
+  mutate(Count_Students_Debt_Cohort.F = factor(Count_Students_Debt_Cohort.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Count_Students_Completed.F=make.ntiles(Count_Students_Completed, 3)) %>%
+  mutate(Count_Students_Completed.F = factor(Count_Students_Completed.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Count_Students_Withdrawn.F=make.ntiles(Count_Students_Withdrawn, 3)) %>%
+  mutate(Count_Students_Withdrawn.F = factor(Count_Students_Withdrawn.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Median_Debt_Completed_Monthly_10YR.F=make.ntiles(Median_Debt_Completed_Monthly_10YR, 3)) %>%
+  mutate(Median_Debt_Completed_Monthly_10YR.F = factor(Median_Debt_Completed_Monthly_10YR.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Net_Tuition.F=make.ntiles(Net_Tuition, 3)) %>% 
+  mutate(Net_Tuition.F = factor(Net_Tuition.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Total_Cost.F=make.ntiles(Total_Cost, 3)) %>% 
+  mutate(Total_Cost.F = factor(Total_Cost.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Undergraduate_Count.F=make.ntiles(Undergraduate_Count, 3)) %>% 
+  mutate(Undergraduate_Count.F=factor(Undergraduate_Count.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>% 
+  mutate(Percent_UG_Federal_Loan.F=make.ntiles(Percent_UG_Federal_Loan, 3))  %>%
+  mutate(Percent_UG_Federal_Loan.F = factor(Percent_UG_Federal_Loan.F, labels = c("Low", "Medium", "High")))
+
+df_fil <- df_fil %>%
+  mutate(Highest_Degree=factor(Highest_Degree, labels = c("Non-degree-granting","Certificate", "Associate", "Bachelor", "Graduate")))
+
+df_fil <- df_fil %>% 
+  mutate(Public_Private=factor(Public_Private, labels = c("Public", "Private Non Profit", "Private for Profit")))
+
+df_fil <- df_fil %>% 
+  mutate(Region = factor(Region, labels = c("US Service Schools", "New England", "Mid East", "Great Lakes", "Plains", "Southeast", "Southwest", "Rocky Mountains", "Far West", "Outlying Areas")))
+
+df_fil$State.F <- as.factor(df_fil$State)
+df_fil$Operating_Flag <- as.logical(df_fil$Operating_Flag)
+df_fil$Hist_Black_Flag <- as.logical(df_fil$Hist_Black_Flag)
+df_fil$Pred_Black_Flag <- as.logical(df_fil$Pred_Black_Flag)
+df_fil$Alaska_Hawaiian_Flag <- as.logical(df_fil$Alaska_Hawaiian_Flag)
+df_fil$Tribal_Flag <- as.logical(df_fil$Tribal_Flag)
+df_fil$Asian_Native_American_Pacific_Flag <- as.logical(df_fil$Asian_Native_American_Pacific_Flag)
+df_fil$Hispanic_Flag <- as.logical(df_fil$Hispanic_Flag)
+df_fil$Native_NonTribal_Flag <- as.logical(df_fil$Native_NonTribal_Flag)
+
+```
+
+Select the new factor variables: 
+
+```{r}
+df_assoc <- df_fil %>% select(Highest_Degree,
+                                Public_Private,
+                                State.F,
+                                Region,
+                                Operating_Flag,
+                                Hist_Black_Flag,
+                                Pred_Black_Flag,
+                                Alaska_Hawaiian_Flag,
+                                Tribal_Flag,
+                                Asian_Native_American_Pacific_Flag,
+                                Hispanic_Flag,
+                                Native_NonTribal_Flag,
+                                Median_Total_Debt.F,
+                                Completed.F,
+                                Withdrawn.F,
+                                Zero_ThirtyK.F,
+                                ThirtyK_SeventyFiveK.F,
+                                SeventyFiveKplus.F,
+                                Dependent.F,
+                                Independent.F,
+                                Pell.F,
+                                notPell.F,
+                                Female.F,
+                                Male.F,
+                                FirstGen.F,
+                                NonFirstGen.F,
+                                Count_Students_Debt_Cohort.F,
+                                Count_Students_Completed.F,
+                                Count_Students_Withdrawn.F,
+                                Median_Debt_Completed_Monthly_10YR.F,
+                                Net_Tuition.F,
+                                Total_Cost.F,
+                                Undergraduate_Count.F,
+                                Percent_UG_Federal_Loan.F)
+
+```
+
+
+Now we will run the associate rules on our dataset.
+
+```{r}
+rules_all = apriori(df_assoc)
+```
+
+To check to see how many rules we have created, we will use the `length` function on our `rules_all` object.
+
+```{r}
+length(rules_all)
+```
+
+As we can see, there are 667,344 rules. We will take a look at a few rules below, however, will plan to narrow down our rules to hone our analysis.
+
+```{r}
+inspect(rules_all[20])
+```
+
+
+
+Below we will sort the rules in decending order of support, confidence, and lift. We will store these new sorted lists in new variables.
+
+```{r}
+rules.sorted.by.support = sort(rules_all, by='support')
+rules.sorted.by.confidence = sort(rules_all, by='confidence')
+rules.sorted.by.lift = sort(rules_all, by='lift')
+```
+
+Now we will examine the top 5 rules with the highest confidence.
+
+```{r}
+inspect(rules.sorted.by.confidence[1:5])
+```
+
+
+Now we will examine the top 10 rules with the highest support
+
+
+```{r}
+inspect(rules.sorted.by.support[1:10])
+```
+
+
+Now we will examine the top 5 rules with the highest support
+
+
+```{r}
+inspect(rules.sorted.by.lift[1:5])
+```
+
+Now we will modify the rules that the `apriori` command generates. Specifcally, we  will adjust the `paramater`, `appearance`, and `control`. To do this, we will first create new variables that have the values we will want to adjust.
+
+Our target variable will be `Median_Total_Debt.F` and therefore in our new object `apriori.appearance` we specify that we want the `rhs` to include `Median_Total_Debt.F = High` or `Median_Total_Debt.F = Low`.
+
+```{r}
+apriori.parameter = list(minlen=2, maxlen=3)
+apriori.control = list(verbose=FALSE)
+apriori.appearance = list(rhs=c('Median_Total_Debt.F=High',
+                                'Median_Total_Debt.F=Low'), default='lhs')
+```
+
+Now that we have created our modifcations, we will implement them by created a new set of rules. 
+
+```{r}
+rules_TotalMedianDebt = 
+  apriori(df_assoc,
+          appearance=apriori.appearance,
+          parameter=apriori.parameter,
+          control=apriori.control)
+```
+
+
+Now we will take a look at how many rules we have.
+
+```{r}
+length(rules_TotalMedianDebt)
+```
+
+We were able to narrow down our rules from over 600,000 to 327! Below we will sort the rules based on their support, confidence, and lift, so that we can get a better look at the factors that affect Total Median Debt.
+
+```{r}
+rules.debt.sorted.by.support = sort(rules_TotalMedianDebt, by='support')
+rules.debt.sorted.by.confidence = sort(rules_TotalMedianDebt, by='confidence')
+rules.debt.sorted.by.lift = sort(rules_TotalMedianDebt, by='lift')
+```
+
+
+Below we will take a look at the rules which have the highest support.
+
+```{r}
+inspect(rules.debt.sorted.by.support[1:5])
+```
+
+As we can see here, 25% of the schools that have a high debt for first generation students also have a high median debt for all students.
+
+Now we can look at the rules that have the highest confidence.
+
+```{r}
+inspect(rules.debt.sorted.by.confidence[1:5])
+```
+
+As we can see here, 100% of the schools that high female and male debt, have high total median debt. (This should make sense.) 
+
+Now we can look at the rules that have the highest lift
+
+```{r}
+inspect(rules.debt.sorted.by.lift[1:5])
+```
+
+As you will see, the order of the rules with the highest lift is exactly the same as the order of rules that have the highest confidence. Here, we can see that the number of schools that have high male and female debt in addition to high median total debt is 247% higher than we would expect if high male and female debt and high median total debt were independent for all schools in our dataset.
+
+
+
+
+
+
+
+```{r}
+apriori.parameter2 = list(minlen=2, maxlen=3)
+apriori.control2 = list(verbose=FALSE)
+apriori.appearance2 = list(rhs=c('Undergraduate_Count.F=High',
+                                'Undergraduate_Count.F=Low'), default='lhs')
+
+apriori.parameter3 = list(minlen=2, maxlen=3)
+apriori.control3 = list(verbose=FALSE)
+apriori.appearance3 = list(rhs=c('Percent_UG_Federal_Loan.F=High',
+                                'Percent_UG_Federal_Loan.F=Low'), default='lhs')
+
+apriori.parameter4 = list(minlen=2, maxlen=3)
+apriori.control4 = list(verbose=FALSE)
+apriori.appearance4 = list(rhs=c('Region=US Service Schools', 'Region=New England', 'Region=Mid East', 'Region=Great Lakes', 'Region=Plains', 'Region=Southeast', 'Region=Southwest', 'Region=Rocky Mountains', 'Region=Far West', 'Region=Outlying Areas'), default='lhs')
+
+apriori.parameter5 = list(minlen=2, maxlen=3)
+apriori.control5 = list(verbose=FALSE)
+apriori.appearance5 = list(rhs=c('Net_Tuition.F=High',
+                                'Net_Tuition.F=Low'), default='lhs')
+
+
+rules_Undergraduate_Count.F = 
+  apriori(df_assoc,
+          appearance=apriori.appearance2,
+          parameter=apriori.parameter2,
+          control=apriori.control2)
+
+rules_Percent_UG_Federal_Loan = 
+  apriori(df_assoc,
+          appearance=apriori.appearance3,
+          parameter=apriori.parameter3,
+          control=apriori.control3)
+
+rules_Region.F = 
+  apriori(df_assoc,
+          appearance=apriori.appearance4,
+          parameter=apriori.parameter4,
+          control=apriori.control4)
+
+rules_Net_Tuition.F = 
+  apriori(df_assoc,
+          appearance=apriori.appearance5,
+          parameter=apriori.parameter5,
+          control=apriori.control5)
+
+length(rules_Percent_UG_Federal_Loan) # 6
+length(rules_Undergraduate_Count.F) # 6
+length(rules_Region.F)  # 1
+length(rules_Net_Tuition.F) # 34
+
+
+rules.tuition.sorted.by.support = sort(rules_Net_Tuition.F, by='support')
+rules.tuition.sorted.by.confidence = sort(rules_Net_Tuition.F, by='confidence')
+rules.tuition.sorted.by.lift = sort(rules_Net_Tuition.F, by='lift')
+
+inspect(rules.tuition.sorted.by.support[1:5])
+# not a lot of support
+# 15% is highest
+
+inspect(rules.tuition.sorted.by.confidence[1:5])
+# strong lift and confidence
+
+inspect(rules.tuition.sorted.by.lift[1:5])
+# same
+
+```
