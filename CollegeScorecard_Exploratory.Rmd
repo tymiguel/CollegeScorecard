@@ -1,0 +1,852 @@
+---
+title: "Investigating Median Loan Debt of College Students"
+author: "Tyler Miguel, Katelyn Tolbert, and Irene Yang"
+date: "2/21/2017"
+output:
+  html_document:
+    toc: yes
+---
+
+# Introduction
+
+The College Scorecard data set contains variables about academic level, admissions rates, cost of admission and other related expenses, financial aid and loan information, student body demographics, as well as the median debt and expected earnings for students post matriculation. This data is designed to "increase transparency" of "college costs and outcomes" to help students and families make informed decisions about the cost of furthering education. 
+
+The data provided is aggregated at the post-secondary institutional levels; there is no data available at the individual level. 
+
+# Goals
+
+Our analysis will focus on exploring the median debt of students and how this varies by different factors. We decided to focus on factors pertaining to the university and the student body which are listed below.
+
+**University Factors**
+
+* Tuition and other instructional expenditures
+* Region of the institution
+* Highest degree offered at the institution
+* Student-body demographics of the institution 
+* Percentage of student-body receiving federal aid
+* Count of undergraduate population
+
+**Student Factors**
+
+* Degree-completion status
+* Family income bracket
+* Gender
+* Dependency status
+* Pell Grant award
+* First generation student
+
+# Dataset description
+
+## Reading the dataset
+
+In order to begin our analysis of this dataset, we loaded the following packages. 
+
+```{r, echo=TRUE, message=FALSE,  }
+library(dplyr)
+library(readr)
+library(tidyr)
+library(plotly)
+library(ggplot2)
+```
+
+In the upcoming sections, we used the `readr` package to read the data into the R environment, `dplyr` and `tidyr` packages to manipulate the data, and `plotly` and `ggplot2` to visualize our data.
+
+We loaded the most recent dataset containing data from the 2014-2015 academic year. We changed all null/NA/missing values to the same data format: "NA". We considered "PrivacySuppressed" data to be "NA" as well because these data points represent information that is unavailable for analysis due to privacy regulations. 
+
+```{r, message=FALSE,  }
+df<-read_csv("CollegeScorecard_Raw_Data/MERGED2014_15_PP.csv", 
+             na = c("","NA","NULL", "PrivacySuppressed"))
+```
+
+You will notice that we chose to use the `read_csv()` function to read the data into the environment, rather than using R's base `read.csv()`. The reason we selected `read_csv()` is that it is faster than `read.csv()`. Furthermore, when using `read_csv()` in conjunction with assigning all missing values to `NA` values, we were able to preserve most to all of the data in its original format. That is, numeric data was read in as numeric data and text data was read in as character data.
+
+Once we read the data into our environment, we started our preliminary exploration of data set, examining the structure and names of the variables, and a small sample of data from the head of the data-frame.
+
+```{r, eval=FALSE,  }
+head(df)
+str(df)
+names(df) 
+```
+
+To make this report more readable, this code output was omitted. However, we observed that the data frame contained 1744 variables and 7703 observations. Additionally, most of our data was preserved, that is, we were able to keep the structure of the variables consistent from the CSV file to our R environment. (Note: Give that there were multiple data files from different years in our zip file, we added a variable called `Time`, prior to importing the data, which indicates which file year the data came from. This is why our dataset contains 1744 variables, rather than 1743 (original).)
+
+However, given the size of our dataset, we would like to minimize the variables we consider by selecting the variables that are most important to our focus of exploring median debt of college students. To do this, we utilized the [data documentation report](http://https://collegescorecard.ed.gov/assets/FullDataDocumentation.pdf) found on the United States Department of Education's College Scorecard Data website. There, we were able to review the documentation and select variables that were most interesting to our analysis.
+
+However, we needed to check the availability of the data to answer the questions we found most interesting. To do this, we had to examine the missing data in our dataset. 
+
+We first looked closer at the data to determine how many fields were missing observation values by summing the `NA` values in the entire data frame and checking to see what percentage of the data frame was missing values.
+
+```{r,  }
+sum(is.na(df))
+(sum(is.na(df))/(ncol(df)*nrow(df)))*100
+```
+
+We observed that there are 10,086,777 NA values in this dataset. This makes up about 75.1% of the overall data!
+
+Now that we know most of the data is missing from this dataset, we moved on to look deeper into the missing values to understand the spread of missing values within the variables. We created a `for` loop that iterates across the entire data frame, summing the number of missing values in each column and dividing by the total number of rows in the data frame. We assigned the value to a vector, `na.col`, which was initialized prior to the `for` loop.
+
+After creating this vector with the percent of missing values for each variable, we examined to see how many variables had complete data, less than half data, or no data at all.
+
+```{r,  }
+na.col <- 0 
+for (i in 1:ncol(df)) {
+  na.col[i] <- sum(is.na(df[,i])) / nrow(df)
+}
+
+sum(na.col == 0) 
+sum(na.col < .5) 
+sum(na.col == 1)
+```
+
+We concluded that 18 variables have 100% data, 478 variables have at least 50% data, and 1165 variables have no data at all. One of the factors we initially wanted to explore was the median earnings of college graduates by school. We believed that this relationship to median debt would be of interest to parents when helping to decide which schools to consider for this children. However, upon review of our missing data, the variables that contained earnings data were completely empty! Without combining external data sets to solve for this, we adjusted our focus to consider data we had readily available from the most recent 2014-2015 school year.
+
+We decided to focus our analysis on variables that had a high percentage of available data. We pulled a list of variables that had 99% available data. 
+
+To do this, we took our vector `na.col` and combined the values with the column names they represented and created a data frame. Next, we filtered the data frame to find the variables which had less than 1% data missing.
+
+```{r,  }
+df_NApercent <-  data.frame(colnames(df), na.col[1:ncol(df)])
+select(data.frame(filter(df_NApercent, na.col < .01)), 1)
+```
+
+The variables with the highest percentage of data are generally descriptive variables about the university, such as location and name-based features.
+
+We chose most of the variables for our analysis from this list. However, given we are interested in investigating the relationship between median student loan debt and school demographics we also pulled the demographic data. We compiled the list of variables we chose, a brief description the variable data type, as well as the units of numeric variables and description of factors into a CSV file, and imported into our R environment.
+
+```{r setup, include=FALSE}
+VariableDictionary<-read_csv("Variable_Dictionary.csv")
+```
+```{r}
+VariableDictionary.df = data.frame(VariableDictionary)
+knitr::kable(VariableDictionary.df) 
+```
+
+We then created a new dataset, from the original data source, with only the variables that we were interested in.
+
+```{r}
+df %>%
+    select(c(Time,
+             INSTNM,
+             CITY,
+             HIGHDEG,
+             CONTROL,
+             ST_FIPS,
+             REGION,
+             CURROPER,
+             DEBT_MDN,
+             GRAD_DEBT_MDN,
+             WDRAW_DEBT_MDN,
+             LO_INC_DEBT_MDN,
+             MD_INC_DEBT_MDN,
+             HI_INC_DEBT_MDN,
+             DEP_DEBT_MDN,
+             IND_DEBT_MDN,
+             PELL_DEBT_MDN,
+             NOPELL_DEBT_MDN,
+             FEMALE_DEBT_MDN,
+             MALE_DEBT_MDN,
+             FIRSTGEN_DEBT_MDN,
+             NOTFIRSTGEN_DEBT_MDN,
+             DEBT_N,
+             GRAD_DEBT_N,
+             WDRAW_DEBT_N,
+             GRAD_DEBT_MDN10YR,
+             TUITFTE,
+             INEXPFTE,
+             HBCU,
+             PBI,
+             ANNHI,
+             TRIBAL,
+             AANAPII,
+             HSI,
+             NANTI,
+             UGDS,
+             PCTFLOAN,
+             LONGITUDE,
+             LATITUDE)) %>%
+             {.} -> df_fil
+```
+
+To make the analysis easier to follow, we renamed the variables in our data frame. Below, we assigned a new character vector to the `names(df_fil)` character vector to overwrite the current variable names.
+
+```{r}
+names(df_fil) <- c("Time", 
+                  "Institution_Name",
+                  "City",
+                  "Highest_Degree",
+                  "Public_Private",
+                  "State",
+                  "Region",
+                  "Operating_Flag",
+                  "Median_Total_Debt",	
+                  "Completed",
+                  "Withdrawn",
+                  "Zero_ThirtyK",
+                  "ThirtyK_SeventyFiveK",
+                  "SeventyFiveKplus",
+                  "Dependent",
+                  "Independent",
+                  "Pell",
+                  "notPell",
+                  "Female",
+                  "Male",
+                  "FirstGen",
+                  "NonFirstGen",
+                  "Count_Students_Debt_Cohort",
+                  "Count_Students_Completed",
+                  "Count_Students_Withdrawn",
+                  "Median_Debt_Completed_Monthly_10YR",
+                  "Net_Tuition",
+                  "Total_Cost",
+                  "Hist_Black_Flag",
+                  "Pred_Black_Flag",
+                  "Alaska_Hawaiian_Flag",
+                  "Tribal_Flag",
+                  "Asian_Native_American_Pacific_Flag",
+                  "Hispanic_Flag",
+                  "Native_NonTribal_Flag",
+                  "Undergraduate_Count",
+                  "Percent_UG_Federal_Loan",
+                  "Longitude",
+                  "Latitude")
+```
+
+Although most of our data was preserved when we read the initial data file into R, we still needed to make a few class conversions to ensure our data was prepared for analysis. Specifically, we needed to convert a few numeric variables into factor variables that we could use for analysis and visualization.
+
+Additionally, we gave a few of the factor variables more understandable labels for ease of interpretation. For instance, rather than the `Public_Private` variable being represented by 1, 2, and 3, we renamed those to "Public", "Private Non Profit", and "Private for Profit", respectively, to denote school type.
+
+```{r, results="hide"}
+df_fil[4:8] <- lapply(df_fil[4:8], as.factor)
+df_fil[29:35] <- lapply(df_fil[29:35], as.factor)
+
+df_fil$Highest_Degree <- factor(df_fil$Highest_Degree,
+                                labels = c("Non-degree-granting","Certificate", "Associate", "Bachelor", "Graduate"))
+
+df_fil$Public_Private <- factor(df_fil$Public_Private,
+                                labels = c("Public", "Private Non Profit", "Private for Profit"))
+
+df_fil$Region <- factor(df_fil$Region,
+                                 labels = c("US Service Schools", "New England", "Mid East", "Great Lakes", "Plains", "Southeast", "Southwest", "Rocky Mountains", "Far West", "Outlying Areas"))
+```
+
+Now that we had a clean working dataset, we wanted to review how many `NA`s were in our filtered dataset. As we've done before, below we examine the total number of missing values in the entire dataset and the percent of the dataset containing missing values.
+
+```{r}
+sum(is.na(df_fil)) 
+(sum(is.na(df_fil))/(ncol(df_fil)*nrow(df_fil))) * 100
+```
+
+Based on our numbers, we determined that we have 36,293 missing values, and that this makes up about 12.1% of our data. This is a significant improvement from our original dataset where more than 75% of our data was missing.
+
+Furthermore, we assessed the percent of missing values by variable.
+
+```{r}
+na.col1 <- 0  
+for (i in 1:ncol(df_fil)) {
+  na.col1[i] <- sum(is.na(df_fil[,i])) / nrow(df_fil)
+}
+
+sum(na.col1 == 0) 
+sum(na.col1 < .1) 
+sum(na.col1 < .2) 
+100-max(na.col1)*100
+```
+
+We determined that 8 variables have 100% data, 21 variables have less than 10% data missing, 29 variables have less than 20% data missing, and all of our variables have at least 68% data. 
+
+# Objective
+
+Our objective is to investigate the effect that each of the University Factors and each of the Student factors has on median student loan debt. We then will explore relationships between factors. To recap, the factors to be investigated as are as follows:
+
+**University Factors**
+
+* Tuition and other instructional expenditures
+* Region of the institution
+* Highest degree offered at the institution
+* Student-body demographics of the institution 
+* Percentage of student-body receiving federal aid
+* Count of undergraduate population
+
+**Student Factors**
+
+* Degree-completion status
+* Family income bracket
+* Gender
+* Dependency status
+* Pell Grant award
+* First generation student
+
+# Variable summaries
+
+##University Factors
+
+### Tuition and other instructional expenditures
+
+First, let's take a look at the average tuition revenue, average instructional expenditures, and average debt to attend a university in our dataset.
+
+```{r}
+df_fil %>%
+  summarise(Average_net_tuition = mean(Net_Tuition, na.rm=T),
+            Average_instructional_exp = mean(Total_Cost, na.rm=T),
+            Average_debt = mean(Median_Total_Debt, na.rm=T))
+```
+
+As we can see, the average net tuition is about \$10,401, the average cost of instruction expenditures per institution is about \$7,360 and the average debt by a student who attended an institution is about \$11,303. Examining the data by institution types highlights some differences in the cost and debt levels for students.
+
+
+```{r}
+df_fil %>%
+  group_by(Public_Private) %>%
+  summarise(Average_net_tuition = mean(Net_Tuition, na.rm=T),
+            Average_instructional_exp = mean(Total_Cost, na.rm=T),
+            Average_debt = mean(Median_Total_Debt, na.rm=T))
+```
+
+It appears that attending a public university will cost the average student less in tuition, however, the institution will spend more than on that student via expenses for instructional purposes. 
+
+Let's examining the ratio between tuition students pay and instructional expenditures per student.
+
+Additionally, the average debt level for the student is higher for private non-profit institutions than for public institutions.
+
+```{r}
+df_fil %>%
+  group_by(Public_Private) %>%
+  summarise(Tution_to_Instruction_Ratio = mean(Net_Tuition, na.rm=T)/mean(Total_Cost, na.rm=T),
+            Average_debt = mean(Median_Total_Debt, na.rm=T))
+```
+
+There is a noticeable difference in the tuition to expenditure ratios of the different school types. For each dollar spent by the university on instructional expenditures per student, a student pays about \$0.54 if they attend a public institution vs \$2.42 if they attend a private for profit institution. It appears that a dollar goes further in a public institution when we just consider the investment an institution spends on instruction for a student.
+
+When comparing the average cost of all institutions to the average cost of institutions by type, it is evident that there appears to be more private for profit institutions influencing the median cost of attending an institution. This general overview of cost and debt will be interesting to consider as we dive further into our analysis considering university and student factors.
+
+### Region of the institution
+
+We will take a look at how the total median debt is scattered across the various regions in the US. Each region is a cluster of states (noted below), except for the U.S. Service Schools and Outlying Areas which encompass U.S. territories.
+
+**Regions**
+
+* U.S. Service Schools
+* New England (CT, ME, MA, NH, RI, VT)
+* Mid East (DE, DC, MD, NJ, NY, PA)
+* Great Lakes (IL, IN, MI, OH, WI)
+* Southwest (AZ, NM, OK, TX)
+* Southeast (AL, AR, FL, GA, KY, LA, MS, NC, SC, TN, VA, WV)
+* Southwest (AZ, NM, OK, TX)
+* Rocky Mountains (CO, ID, MT, UT, WY)
+* Far West (AK, CA, HI, NV, OR, WA)
+* Outlying Areas (AS, FM, GU, MH, MP, PR, PW, VI)
+
+```{r}
+df_fil %>%
+  ggplot(aes(x=Region,
+             y=Median_Total_Debt)) +
+  geom_boxplot(aes(fill=Region))
+```
+
+From the box plot above, it appears that the median total debt across all regions is similar, however, it is clear that there are distinct outliers in many of the regions outside of New England and the Mid East. We will look further into this later.
+
+Another point of emphasis we want to make here is about the total median debt of US Service Schools. It appears that all the US Service Schools have the same total median debt, however, when we look closer at the spread of schools we can see that there is only one in our data set. 
+
+```{r}
+df_fil %>% 
+  group_by(Region) %>% 
+  summarise("count of schools" = n())
+```
+
+```{r}
+df_fil %>% 
+  filter(Region=="US Service Schools") %>%
+  select(Institution_Name, Median_Total_Debt, Total_Cost)
+```
+
+The students at the United States Merchant Marine Academy are fortunate! With a median debt of $5,500 it appears that this could be a bargain!
+
+### Highest degree offered at the institution
+
+Given that students have different degree aspirations when enrolling in college, it makes sense to take a look at the spread of the highest degrees offered at the institutions. 
+
+```{r}
+df_fil %>%
+  ggplot(aes(x=Highest_Degree)) +
+  geom_bar(aes(fill=Highest_Degree))
+```
+
+As we can see, around 3,000 institutions offer at least a bachelor's degree. This accounts for just over 35% of our total schools. This data gets even more interesting when you dissect the plot above by Public/Private designation.
+
+```{r}
+df_fil %>%
+  ggplot(aes(x=Highest_Degree)) +
+  geom_bar(aes(fill=Public_Private))
+```
+
+The plot above tells a vastly different story. Most of the institutions that award, at the highest level, graduate degrees, are private non-profit institutions. This is interesting to consider given that the average median instructional expenditures per student is highest for private non-profit schools, on average. Based on what we know about the median instructional expenditures per school type and the spread of the highest degrees, it appears there is a correlation between the median instructional expenditures per student of an institution and the highest degree that institution offers. 
+
+Similarly, private for-profit institutions had the lowest median instructional expenditures per student and these institutions appear to account for most of the lower-level degrees, such as non-degree-granting and certificate programs. 
+
+It seems that private for-profit institutions are not only receiving more in tuition from students per dollar invested back into instructional time, but the outcomes of these programs are much lower than public or private non-profit institutions.
+
+### Student-body demographics of the institution 
+
+Some universities in the US were created in response to a need to serve specific demographic communities. These universities are denoted by binary variables stating whether a university was created to service a specific group such as, Historically Black, Predominately Black, Alaskan Native and Native Hawaiian, Tribal, Asian American/Native American/Pacific Islander, Hispanic, or Native American Non-Tribal.
+
+To examine the median debt of students for these groups of schools, we had to create a new variable `hist_flag` which groups all the schools designations into one variable. We created a new variable, `hist_flag`, to denote which community the institution was created to primarily serve, by using the `mutate()` function. We then appended this new variable back to the data frame. We then named the factor levels to make them easier to understand.
+
+Then, we were able to visualize the median total debt by community focused institution.
+
+```{r}
+df_fil %>%
+  mutate(hist_flag = ifelse(Hist_Black_Flag == 1, 1,
+                            ifelse(Pred_Black_Flag == 1, 2,
+                                   ifelse(Alaska_Hawaiian_Flag==1, 3,
+                                          ifelse(Tribal_Flag==1, 4,
+                                                 ifelse(Asian_Native_American_Pacific_Flag==1, 5,
+                                                        ifelse(Hispanic_Flag==1,6,
+                                                               ifelse(Native_NonTribal_Flag==1,7, NA)))))))) %>%
+  mutate(hist_flag = as.factor(hist_flag)) %>%
+  {.} -> df_fil
+
+df_fil$hist_flag <- factor(df_fil$hist_flag,
+                       labels = c("Hist. Black",
+                                  "Pred. Black",
+                                  "Alaskan N./N. Hawaiian",
+                                  "Tribal",
+                                  "Asian A./N.A./Pacific Island",
+                                  "Hispanic",
+                                  "N.A. Non Tribal"))
+
+df_fil %>%
+  ggplot(aes(x=hist_flag,
+             y=Median_Total_Debt)) +
+  geom_boxplot(aes(fill=hist_flag))
+```
+
+It is interesting to see how students at Historically Black Colleges and Universities (HBCU) had a noticeably higher median debt total as compared to the other institutions. Additionally, We didn't notice many institutions as outliers when it came to total debt, however, for institutions not labeled to serve a specific community there were many that were considered outliers.
+
+### Percentage of student-body receiving federal aid
+
+Given that the data in our report is subject to where a student is received financial aid or not, it is imperative to know what percentage of the population is receiving aid to understand how the data in this report generalizes to the entire college population.
+
+To do this, we took a weighted average of the percent of students who receive federal loans. 
+
+```{r}
+df_fil %>%
+  summarise("Percent Recieving Aid" = 
+              sum(Percent_UG_Federal_Loan*Undergraduate_Count, na.rm=T)/sum(Undergraduate_Count, na.rm=T))
+```
+
+According to our sample data, which includes 6,990 institutions, 40% of the students across our sample receive financial aid in the form of federal loans.
+
+This information is important when we consider that accounts for 16,301,791 individuals who are pursuing an education. Given that the interest rates on money borrowed is expected to increase in the coming years as the federal interest rate increases, the cost of borrowing money, holding all other variables equal, is expected to rise.
+
+It is important to consider the borrowing factor when considering an institution. Below we will look at the percent of students receiving federal loans by degree type.
+
+```{r}
+df_fil %>%
+  group_by(Highest_Degree) %>%
+  summarise("Percent_Recieving_Aid" = 
+              sum(Percent_UG_Federal_Loan*Undergraduate_Count, na.rm=T)/sum(Undergraduate_Count, na.rm=T))
+```
+
+As we can see below the percent of students receiving aid differs across institutions, with the highest percent of students who receive financial aid enrolled in institutions where the highest degree awarded is a graduate degree. This insight would be great to further explore so that we can understand how federal dollars are distributed among institutions. For a student who is relying on federal loans to finance college, it could be that federal dollars are mostly awarded to schools that offer higher degree, thus motivating a student to apply to a school where they can achieve a higher degree of education. 
+
+However, this can not be deduced from this information. We would need additional information on federal spending and the policy around decision making for federal spending.
+
+### Count of undergraduate population
+
+Before digging into student factors, it's important to get an understanding of what the spread of students is across all institutions. Below, we examine the spread of students across institutions, taking into account the highest degree the institution offers and the their public/private designation.
+
+```{r}
+df_fil %>%
+  group_by(Highest_Degree, Public_Private) %>%
+  summarise(Total_Students = sum(Undergraduate_Count, na.rm=T)) %>%
+  ggplot   (aes(x=Highest_Degree, y=Public_Private)) + 
+  geom_tile(aes(fill=Total_Students))
+```
+
+The plot above illustrates that the majority of students are enrolled in institutions that are public and award, at the highest, a graduate degree. Additionally, it spears that the population of students enrolled is high in public institutions that award, at highest, an associates degree, and private non-profit institutions that award, at highest, graduate degrees.
+
+When considering the percentage of students receiving federal loans, it appears that students who attend an institution that awards, at highest, an associates degree are less likely to receive federal loans. 
+
+This population of students could possibly not qualify for federal funds, be less likely to apply, or be more inclined to pay out of pocket. These inferences will need to be further studied to prove any of them true, given this point of the analysis is merely to summarize the observations in our data.
+
+We will continue to dive further into student factors throughout this analysis.
+
+## Student Factors
+
+Now that we have examined the many factors that distinguish and describe a university, we will look into the factors that help us understand the students attending these universities. Specifically, we will examine the factors that affect median debt levels of students.
+
+### Degree-completion status
+
+We combined the variables `Completed` and `Withdrawn` (which denote median debt level of students based on completion status) to create a new factor variable titled `CompletedStatus`. We stored this variable in a small data frame.
+
+```{r}
+CompletedStatus.df <- 
+  df_fil[c("Completed","Withdrawn", "Institution_Name", "Region")] %>%
+  gather(CompletedStatus, Median_Debt, Completed:Withdrawn, -Institution_Name, -Region)
+```
+
+We then plotted the `CompletedStatus` variable on a box plot to visualize the relationship between `Median_Debt` and whether a student completed his or her degree or withdrew from the institution.
+
+```{r}
+CompletedStatus.df %>%
+  ggplot(aes(x=CompletedStatus,
+             y=Median_Debt)) +
+  geom_boxplot(aes(fill=CompletedStatus))
+```
+
+The plot above indicates that students who completed their degrees, ultimately ended with a higher  `Median_Debt` than students who withdrew from University. This makes sense because it is likely that students who withdrew, did not accumulate a full 4-5 years of student loans. However, we do not have visibility to the number of years a student who withdrew attended the institutions. Thus, although we can assume this difference is due to a lower number of years in attendance, we cannot say this with certainty. 
+
+We also noticed a large number of outliers within the data points for students who withdrew from university. We decided to further investigate the schools that had higher `Median_Debt` amounts for students who withdrew than for students who completed.
+
+We first calculated the average `Median_Debt` amount for students who completed. 
+
+```{r}
+CompletedStatus.df %>% 
+  filter(CompletedStatus == "Completed") %>% 
+  summarize(mean=mean(Median_Debt,na.rm=TRUE))
+```
+
+This average is \$16,751.23. We then filtered the `CompletedStatus` variable to extract the median debt for students who had withdrawn. Then, we were able to count the total number of schools that had a `Median_Debt` amount greater than or equal to the average median debt of a student who had completed their program.
+
+```{r}
+CompletedStatus.df %>% 
+  filter(CompletedStatus == "Withdrawn" & Median_Debt >= 16751.23) %>%
+  summarize(Count = n())
+```
+We observed that there are 76 universities that meet this criteria. Below is a full list of the 76 schools: 
+
+```{r}
+CompletedStatus.df %>% 
+  filter(CompletedStatus == "Withdrawn" & Median_Debt >= 16751.23) %>%
+  select(Institution_Name)
+```
+
+We decided to see if there were differences in counts by Region. 
+
+```{r}
+CompletedStatus.df %>% 
+  filter(CompletedStatus == "Withdrawn" & Median_Debt >= 16751.23) %>% 
+  group_by(Region) %>% 
+  summarize(Count = n())
+```
+
+We noticed that the Far West region had the highest count of universities where the `Median_Debt` of students who withdrew was greater than or equal to students who completed their degree.
+
+It would be interesting to understand what causes this relationship. Several questions come to mind: 
+
+* Is the tuition higher for schools in these regions?
+* Are students dropping out during their 4th or 5th years instead of earlier on? 
+* Are students in these regions receiving less scholarships or grant money? 
+
+Although we don't dive into this area in this report, this is something to consider for future analysis on this topic.
+
+### Family income bracket
+
+The variables `Zero_ThirtyK`, `ThirtyK_SeventyFiveK` and `SeventyFiveKplus` represent the `Median_Debt` per student by annual household income of \$0-\$30,000, \$30,000-\$75,000, and \$75,000+ respectively. We combined these variables to create a new factor variable titled `FamilyIncomeBracket`. We stored this variable in a small data frame `FamilyIncomeBracket.df`.
+
+```{r}
+FamilyIncomeBracket.df <- 
+  df_fil[c("Zero_ThirtyK", 
+           "ThirtyK_SeventyFiveK", 
+           "SeventyFiveKplus", 
+           "Institution_Name", 
+           "Region")] %>%
+  gather(FamilyIncomeBracket, 
+         Median_Debt, 
+         Zero_ThirtyK:SeventyFiveKplus, 
+         -Institution_Name, -Region)
+```
+
+We then generated a box plot of `Median Debt` by `FamilyIncomeBracket`.
+
+```{r}
+FamilyIncomeBracket.df %>%
+  ggplot(aes(x=FamilyIncomeBracket,
+             y=Median_Debt)) +
+  geom_boxplot(aes(fill=FamilyIncomeBracket))
+```
+
+We observed that there does not appear to be a drastic difference in average `Median_Debt` by `FamilyIncomeBraket`. We also notice there is a wider range within the normal distribution of `Median_Debt` for students in higher income brackets. In general, students within lower income brackets can expect to leave university with a lower `Median_Debt` than those whose families are more well off. However, there are also a significantly higher number of outliers for students in the lowest family income bracket. 
+
+We decided to look at the maximum and average value for each of the brackets. 
+
+```{r}
+FamilyIncomeBracket.df %>% 
+  group_by(FamilyIncomeBracket) %>% 
+  summarise(max=max(Median_Debt, na.rm=TRUE), mean=mean(Median_Debt, na.rm=TRUE))
+```
+
+We observed that the maximum `Median_Debt` for students in \$30-\$75k bracket was \$41,000, followed closely behind by \$40,000 for students in the less than \$30k bracket. The lowest mean `Median_Debt` falls to the students in the highest income bracket. Yet, this value is less than $5k different than for students whose families are in the middle income bracket.
+
+### Gender
+
+We combined the variables `Female` and `Male` to create a new factor variable titled `Gender`. We stored this variable in a small data frame, `Gender.df`.
+
+```{r}
+Gender.df <- 
+  df_fil[c("Female","Male", "Institution_Name", "Region")] %>%
+  gather(Gender, Median_Debt, Female:Male, -Institution_Name, -Region)
+```
+
+We then plotted the `Gender` variable on a violin plot to visualize the relationship between `Median Debt` and `Gender`. 
+
+```{r}
+Gender.df %>%
+  ggplot(aes(x=Gender,
+             y=Median_Debt)) +
+  geom_violin(aes(fill=Gender))
+```
+
+We observe that most students of both genders accrue about \$10,000 in debt. We also notice that the maximum `Median_Debt` for females is higher than that for males. It would be interesting to understand what drives this. 
+
+We decided to investigate which schools had the highest `Median_Debt` by Gender. 
+
+```{r}
+df_fil %>% 
+  select(Institution_Name, Female, Male) %>%  
+  filter(Female== max(Female, na.rm = TRUE)) 
+
+df_fil %>% 
+  select(Institution_Name, Male, Female) %>%  
+  filter(Male==max(Male, na.rm=TRUE))
+```
+Southwest University has the highest `Median_Debt` for Females, \$40,250. At this University, the `Median_Debt` for males is almost \$10,000 less. When we look at the highest `Median_Debt` for males, we see that is is \$36,824 at this stems across four different institutions: Collins College, Sanford-Brown College, and the Troy and Nashville campuses for the International Academy of Design. 
+
+We noticed that the difference in Female `Median_Debt` for this school is only \$1,000 less. Thus we decided to investigate the average difference in `Median_Debt` between males and females across all the universities. 
+
+```{r}
+df_fil %>% 
+  mutate(Female_Minus_Male = Female-Male) %>% 
+  summarise(Average = mean(Female_Minus_Male, na.rm=TRUE))
+```
+
+We conclude that, on average, women accrue \$747.72 more debt than their male counterparts. 
+
+### Dependency status
+
+The variables `Independent` and `Dependent` represent whether a student is listed as dependent on their family. We combined these variables to create a new factor variable titled `DependancyStatus` and stored this variable in a small data frame `DependencyStatus.df`. 
+
+```{r}
+DependencyStatus.df <- 
+  df_fil[c("Dependent","Independent", "Institution_Name", "Region")] %>%
+  gather(DependencyStatus, Median_Debt, 
+         Dependent:Independent, 
+         -Institution_Name, -Region)
+```
+
+We then plotted the `Gender` variable on a box plot to visualize the relationship between `Median Debt` and `Gender`. 
+
+```{r}
+DependencyStatus.df %>%
+  ggplot(aes(x=DependencyStatus,
+             y=Median_Debt)) +
+  geom_boxplot(aes(fill=DependencyStatus))
+```
+We observed that the average `Median Debt` for independent and dependent students is very similar, but the distribution for independent students has a slightly higher debt range than the dependent students. 
+
+### Pell Grant award
+
+We combined the variables `Pell` and `notPell` to create a new factor variable titled `PellGrant`. This factor variable indicates whether or not a student received the Pell Grant award. We stored this variable in a small data frame, `PellGrant.df`. 
+
+```{r}
+PellGrant.df <- 
+  df_fil[c("Pell","notPell", "Institution_Name", "Region")] %>%
+  gather(PellGrant, Median_Debt, 
+         Pell:notPell, 
+         -Institution_Name, -Region)
+```
+
+We then plotted the `PellGrant` variable on a box plot to visualize the relationship between `Median Debt` and whether or not a student received this grant.
+
+```{r}
+PellGrant.df %>%
+  ggplot(aes(x=PellGrant,
+             y=Median_Debt)) +
+  geom_boxplot(aes(fill=PellGrant))
+```
+
+We observed that the average `Median_Debt` was similar for students who received the Pell Grant and those who did not receive it. However, for those who did not receive the Pell Grant, there is a wider distribution of `Median_Debt` and the outliers also reach much higher debts. 
+
+The dataset does not provide information about the average grant size for the students. It is possible that the average grant amount was lower for the universities that make up the higher outliers in the `Pell` grant category. 
+
+### First generatation student
+
+Finally, we also wished to explore the relationship between `Median_Debt` and if a student was the first generation to attend university. We combined the variables `FirstGen` and `NonFirstGen` into a factor variable titled `FirstGeneration` and saved this into a smaller data frame `FirstGeneration.df`. 
+
+```{r}
+FirstGeneration.df <- 
+  df_fil[c("FirstGen","NonFirstGen", "Institution_Name", "Region")] %>%
+  gather(FirstGeneration, Median_Debt, 
+         FirstGen:NonFirstGen, 
+         -Institution_Name, -Region)
+```
+
+We then plotted the `FirstGeneration` variable in a box plot. 
+
+```{r}
+FirstGeneration.df %>%
+  ggplot(aes(x=FirstGeneration,
+             y=Median_Debt)) +
+  geom_boxplot(aes(fill=FirstGeneration))
+```
+
+After observing the box plot, we concluded that there does not appear to be a drastic difference in `Median_Debt` when comparing first generation and non-first generation students. We ran a t-test to be sure. We assessed the average difference for all institutions: 
+
+```{r}
+t.test(df_fil$FirstGen,df_fil$NonFirstGen,paired=TRUE)
+```
+
+We concluded that although the difference is statistically significant, the $301 that First Generation students save on average over Non-First Generation students is not practically significant considering the average debt is close to \$10,000.
+
+# Exploration of additional Multi-Variable relationships
+
+In our variables summary above, we highlighted a few multi-variable relationships that we wanted to explore further. Below we decided to look a bit deeper into multi-variable relationships across our dataset. 
+
+## Median loan debt of those who completed Bachelor's degrees by School Type
+
+We decided that it would be interesting to visualize the type of university (public/private) on a map to get a better visual understanding of our institutions.
+
+First, we set the layout of the map.
+
+```{r}
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showland = TRUE,
+  landcolor = toRGB("gray85"),
+  subunitwidth = 1,
+  countrywidth = 1,
+  subunitcolor = toRGB("white"),
+  countrycolor = toRGB("white")
+)
+```
+
+Now that the layout has been established, we can plot the map.
+
+```{r warning=FALSE}
+p <- plot_geo(df_fil, 
+              locationmode = 'USA-states', 
+              sizes = c(1, 3)) %>%
+  add_markers(x = df_fil$Longitude, 
+              y = df_fil$Latitude, 
+              size = df$Completed, 
+              color = ~Public_Private, 
+              hoverinfo = "text",
+              text = ~paste(df_fil$Institution_Name, 
+                            "<br />", 
+                            df_fil$Completed/1000, 
+                            "k")
+  ) %>%
+  layout(title = 'Map of US institutions in 2015', geo = g)
+p
+```
+
+We can quickly assess from the plot above that there are many more universities located on the eastern part of the United States. This plot is interactive and if you hover over the individual dots, the median debt for that school pops up.
+
+To take one step further, we would like to see the total debt for students who completed their program, differentiated by the type of school (Public, Private non-profit, Private for-profit).
+
+```{r}
+df_fil %>%
+  select(Public_Private,Completed) %>%
+  group_by(Public_Private) %>%
+  summarize(mean=mean(Completed,na.rm=TRUE),
+            standard_deviation=sd(Completed,na.rm=TRUE)) -> 
+  schooltype
+schooltype
+
+```
+
+Students who completed their program at a private non-profit school had the highest mean debt, with the lowest standard deviation. However, students who completed their program at a private for-profit school had the highest standard deviation, which means that there is more variability in the median debt levels of students at private for-profit schools.
+
+For public schools, students who completed their program had the lowest debt, which is makes sense, since public schools are cheaper than private schools.
+
+Then, we visualize the data with ggplot.
+
+```{r}
+ggplot(schooltype, aes(x=Public_Private,y=mean)) +
+  geom_bar(position=position_dodge(),stat="identity", 
+           aes(fill=Public_Private)) +
+  geom_errorbar(aes(ymin=mean-standard_deviation,
+                    ymax=mean+standard_deviation), 
+                width=.5, position=position_dodge(.9))
+```
+
+The plot above shows the mean debt level of a student at a school. The error bar that is used for each colored bar shows one standard deviation away from the mean. That is to say, most of the public school students who have completed their program left school with debt levels anywhere between \$8,000 to \$22,000.
+
+## Total Cost Influence
+
+We decided to investigate the relationship of student debt between students who withdrew from university before completing their program and the net tuition revenue per student of the university. Although it is not possible to understand relationships between cost and the an individual student with this dataset, we are interested to see if the overall debt for students who withdrew from their institution was higher for students who attended more expensive universities.
+
+We recall that earlier we generated a count of the universities in each region that had a "Withdrawn" student `Median_Debt` greater than or equal to the overall average `Median_Debt` for the data set. 
+
+```{r}
+CompletedStatus.df %>% 
+  filter(CompletedStatus == "Withdrawn" & Median_Debt >= 16751.23) %>% 
+  group_by(Region) %>% 
+  summarize(Above_Average_Median_Debt = n()) %>%
+  arrange(desc(Above_Average_Median_Debt))
+```
+
+We recall that the Far West, Southeast, Mid East and Great Lakes regions have the highest count of schools with higher `Median_Debt` for withdrawn students. 
+
+We then plotted the average `Net_Tuition` of the university along with the average debt for students who withdraw from schools in that region. 
+
+To begin with, we filter out the data we need. 
+```{r}
+df_fil%>%
+  select(Withdrawn, Net_Tuition, Region) %>%
+  group_by(Region)%>%
+  summarize(meanT=mean(Net_Tuition,na.rm=TRUE),
+            meanW=mean(Withdrawn,na.rm=TRUE)) %>%
+  arrange(desc(meanT)) -> WTC
+```
+Then, we draw the plot. 
+```{r}
+regional <- 
+  plot_ly(WTC,
+          x = ~Region,
+          y = ~meanT,
+          name= 'Average Total Cost',
+          type = "bar", 
+          marker = list(color = 'rgb(55, 83, 109)')) %>%
+  add_trace(y = ~meanW,
+            name = 'Average Median Debt (Withdrawn)', 
+            marker = list(color = 'rgb(26, 118, 255)')) %>%
+  layout(title = 'Cost and Debt by Region for Withdrawn Students',
+         xaxis = list(
+           title = "",
+           tickfont = list(
+             size = 14,
+             color = 'rgb(107, 107, 107)')),
+         yaxis = list(
+           title = 'USD',
+           titlefont = list(
+             size = 16,
+             color = 'rgb(107, 107, 107)'),
+           tickfont = list(
+             size = 14,
+             color = 'rgb(107, 107, 107)')),
+         legend = list(x = 0, y = 1, 
+                       bgcolor = 'rgba(255, 255, 255, 0)',
+                       bordercolor = 'rgba(255, 255, 255, 0)'),
+         barmode = 'group', bargap = 0.15, bargroupgap = 0.1)
+regional 
+```
+
+From the plot, we can see that the regions with higher net tuition are from New England, the Mid East, and the Far West. We also recall from our earlier analysis of Institutions that there is only one university in the U.S. Service School Region, the United States Merchant Marine Academy, so we must keep in mind that only one data point makes up the bar for this region. 
+
+Based on this information, it doesn't appear that the cost of the university (according to region) plays a factor in the the debt level of a student who withdraws from their program.
+
+# Conclusion/Summary of Most Interesting Findings
+
+In conclusion, this dataset provided a lot of valuable insights for students and families who are trying to understand their options for funding further education. As discussed above, there are many factors in play that determine the average median debt that students can expect to accrue when attending different universities. 
+
+While this data has been helpful to make a lot of generalized decisions, we would like to see a future dataset that is designed more effectively, and would especially like to see data that is anonymized at the individual student level so that we could generate a predictive model to help students better understand how their demographics, dependency status, and family income bracket can help to predict the debt they will accrue during their education.
+
+Additionally, it would be very helpful to have updated detailed earning data broken out by major/degree. It is well known that different fields have different expected earning brackets, and the current dataset does not provide this level of detail. 
+
+In further analyses, requiring additional data-sets, we would like to investigate other issues such as the following: 
+
+* What factors correlate to higher earning potential?
+* Is there a way to "justify" the total net tuition cost of a school by expected earning potential? (Perhaps some schools are not worth the loan amount?)
+*	Is there a correlation between earnings and financial aid?
