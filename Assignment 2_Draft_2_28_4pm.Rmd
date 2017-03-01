@@ -1,0 +1,524 @@
+---
+title: "Assignment 2"
+author: "Katelyn Tolbert"
+date: "2/21/2017"
+output: html_document
+---
+
+# Introduction
+
+The College Scorecard data set contains variables about academic level, admissions rates, cost of admission and other related expenses, financial aid and loan information, student body demographics, as well as the median debt and expected earnings for students post matriculation. This data is designed to "increase transparency" of "college costs and outcomes" to help students and families make informed decisions about the cost of furthering education. 
+
+The data provided is aggregated at the post-secondary institutional levels; there is no data available at the individual level. 
+
+# Goals
+
+Our analysis will focus on exploring association rules and cluster analysis for our dataset. We are particularly interested in examining the rules and clusters that effect median debt of students. We decided to focus on factors pertaining to the university and the student body which are listed below.
+
+**University Factors**
+
+* Tuition and other instructional expenditures
+* Region of the institution
+* Highest degree offered at the institution
+* Student-body demographics of the institution 
+* Percentage of student-body receiving federal aid
+* Count of undergraduate population
+
+**Student Factors**
+
+* Degree-completion status
+* Family income bracket
+* Gender
+* Dependency status
+* Pell Grant award
+* First generation student
+
+# Dataset description
+
+## Reading the dataset
+
+In order to begin our analysis of this dataset, we loaded the following packages. 
+
+```{r, echo=TRUE, message=FALSE,  }
+library(dplyr)
+library(readr)
+library(tidyr)
+library(plotly)
+library(ggplot2)
+library(arules)
+library(lazyeval)
+library(plyr)
+library(grid)
+library("arulesViz")
+
+```
+
+In the upcoming sections, we used the `readr` package to read the data into the R environment, `dplyr` and `tidyr` packages to manipulate the data, `plotly` and `ggplot2` to visualize our data, `arules` to create association rules for our data, and `lazyeval` to develop a function that does standard evaluation.
+
+We loaded the most recent dataset containing data from the 2014-2015 academic year. We changed all null/NA/missing values to the same data format: "NA". We considered "PrivacySuppressed" data to be "NA" as well because these data points represent information that is unavailable for analysis due to privacy regulations. 
+
+```{r, message=FALSE,  }
+df<-read.csv("/Users/Irene/Desktop/graduate/MA710/asst2/CollegeScorecard_Raw_Data/MERGED2014_15_PP.csv",na = c("","NA","NULL", "PrivacySuppressed"))
+
+```
+
+Similar to our [*Investigation of Median Loan Debt*](insert link to other assignmnet) we will look to start with a specific group of variables that we will explore further. We will use the same variables that we explored in the previous analysis. 
+
+As a reminder, we utilized the [data documentation report](http://https://collegescorecard.ed.gov/assets/FullDataDocumentation.pdf) found on the United States Department of Education's College Scorecard Data website, and the percentage of data missing, as two components to help select these variables.
+
+```{r}
+df %>%
+  select(c(INSTNM,
+           CITY,
+           HIGHDEG,
+           CONTROL,
+           ST_FIPS,
+           REGION,
+           CURROPER,
+           DEBT_MDN,
+           GRAD_DEBT_MDN,
+           WDRAW_DEBT_MDN,
+           LO_INC_DEBT_MDN,
+           MD_INC_DEBT_MDN,
+           HI_INC_DEBT_MDN,
+           DEP_DEBT_MDN,
+           IND_DEBT_MDN,
+           PELL_DEBT_MDN,
+           NOPELL_DEBT_MDN,
+           FEMALE_DEBT_MDN,
+           MALE_DEBT_MDN,
+           FIRSTGEN_DEBT_MDN,
+           NOTFIRSTGEN_DEBT_MDN,
+           DEBT_N,
+           GRAD_DEBT_N,
+           WDRAW_DEBT_N,
+           GRAD_DEBT_MDN10YR,
+           TUITFTE,
+           INEXPFTE,
+           HBCU,
+           PBI,
+           ANNHI,
+           TRIBAL,
+           AANAPII,
+           HSI,
+           NANTI,
+           UGDS,
+           PCTFLOAN,
+           LONGITUDE,
+           LATITUDE)) %>%
+           {.} -> df_fil
+```
+
+To make the analysis easier to follow, we renamed the variables in our data frame. Below, we assigned a new character vector to the `names(df_fil)` character vector to overwrite the current variable names.
+
+```{r}
+names(df_fil) <- c("Institution_Name",
+                   "City",
+                   "Highest_Degree",
+                   "Public_Private",
+                   "State",
+                   "Region",
+                   "Operating_Flag",
+                   "Median_Total_Debt",	
+                   "Completed",
+                   "Withdrawn",
+                   "Zero_ThirtyK",
+                   "ThirtyK_SeventyFiveK",
+                   "SeventyFiveKplus",
+                   "Dependent",
+                   "Independent",
+                   "Pell",
+                   "notPell",
+                   "Female",
+                   "Male",
+                   "FirstGen",
+                   "NonFirstGen",
+                   "Count_Students_Debt_Cohort",
+                   "Count_Students_Completed",
+                   "Count_Students_Withdrawn",
+                   "Median_Debt_Completed_Monthly_10YR",
+                   "Net_Tuitition",
+                   "Total_Cost",
+                   "Hist_Black_Flag",
+                   "Pred_Black_Flag",
+                   "Alaska_Hawaiian_Flag",
+                   "Tribal_Flag",
+                   "Asian_Native_American_Pacific_Flag",
+                   "Hispanic_Flag",
+                   "Native_NonTribal_Flag",
+                   "Undergraduate_Count",
+                   "Percent_UG_Federal_Loan",
+                   "Longitude",
+                   "Latitude")
+```
+
+Now that our data is selected and stored in a data frame, we will move onto completing some association rules for our data.
+
+# Association Rules
+
+Association rules is techinquie used in data mining (and machine learning) to discover relationships between variables in large datasets. It's goal is to identify "rules"" discovered in our data. For instance, an example of [market basket analysis](https://en.wikipedia.org/wiki/Affinity_analysis) ultizes rules to help uncover customers who purchase similar items when they go to the grocery store. A hypothetical example of a rule could be that 92% of customers who purchase cold cereal tend to also purchase milk. This would be helpful to the store owner when considering placement of items in their store.
+
+Although, these techniques are used in product placement, we can also use these technique to help understand relationships across different datasets.
+
+## Association Rules Goal
+
+The goal of our association rules section is to help understand the relationship between factors in our dataset and the median debt level for a student. Additionally, we will look to examine the relatinship between the factors in our dataset and the net tuition cost for a student.
+
+## Prepaing data for association rules
+
+Before we analyze our data. We will need to prepare our data specifically for association rules. Association rules work primarily with factor variables, therefore, we must first convert our numerical variables into factor variables.
+
+
+##Creating binned factors
+```{r}
+#below: add more variables that you want to select
+df_q<-df_fil
+#below: add more variables that you want to select
+df_q[c("Median_Total_Debt", 
+          "Completed",
+          "Withdrawn",
+          "Zero_ThirtyK",
+          "ThirtyK_SeventyFiveK",
+          "SeventyFiveKplus",
+          "Dependent",
+          "Independent",
+          "Pell",
+          "notPell",
+          "Female",
+          "Male",
+          "FirstGen",
+          "NonFirstGen",
+          "Count_Students_Debt_Cohort",
+          "Count_Students_Completed",
+          "Count_Students_Withdrawn",
+          "Median_Debt_Completed_Monthly_10YR",
+          "Net_Tuitition",
+          "Total_Cost",
+          "Undergraduate_Count",
+          "Percent_UG_Federal_Loan")]<-lapply(df_q[c("Median_Total_Debt", 
+                                                        "Completed",
+                                                        "Withdrawn",
+                                                        "Zero_ThirtyK",
+                                                        "ThirtyK_SeventyFiveK",
+                                                        "SeventyFiveKplus",
+                                                        "Dependent",
+                                                        "Independent",
+                                                        "Pell",
+                                                        "notPell",
+                                                        "Female",
+                                                        "Male",
+                                                        "FirstGen",
+                                                        "NonFirstGen",
+                                                        "Count_Students_Debt_Cohort",
+                                                        "Count_Students_Completed",
+                                                        "Count_Students_Withdrawn",
+                                                        "Median_Debt_Completed_Monthly_10YR",
+                                                        "Net_Tuitition",
+                                                        "Total_Cost",
+                                                        "Undergraduate_Count",
+                                                        "Percent_UG_Federal_Loan")], function(x){
+                                          x %>%
+                                            quantile(.,
+                                                     (1/3) * 1:(3-1),
+                                                     na.rm=TRUE
+                                            ) %>%
+                                            c(-Inf, ., Inf) %>% cut(x,breaks=.,paste("Q", 1:3, sep=""))
+                                        })
+df_q<-subset(df_q,select=c("Median_Total_Debt", 
+                                 "Completed",
+                                 "Withdrawn",
+                                 "Zero_ThirtyK",
+                                 "ThirtyK_SeventyFiveK",
+                                 "SeventyFiveKplus",
+                                 "Dependent",
+                                 "Independent",
+                                 "Pell",
+                                 "notPell",
+                                 "Female",
+                                 "Male",
+                                 "FirstGen",
+                                 "NonFirstGen",
+                                 "Count_Students_Debt_Cohort",
+                                 "Count_Students_Completed",
+                                 "Count_Students_Withdrawn",
+                                 "Median_Debt_Completed_Monthly_10YR",
+                                 "Net_Tuitition",
+                                 "Total_Cost",
+                                 "Undergraduate_Count",
+                                 "Percent_UG_Federal_Loan"))#replace select with the one you want
+#attached".F" to the factor column
+colnames(df_q)[1:ncol(df_q)] <- paste( colnames(df_q[,c(1:ncol(df_q))]),".F", sep = "")
+#change the q1,q2,q3 to "Low", "Medium", "High".Functions for change to factor and change all variable to factor
+for(i in 1:length(df_q)){
+df_q[,i]<-mapvalues(df_q[,i], from = c("Q1", "Q2","Q3"), to = c("Low", "Medium","High"))
+}
+for(i in 1:length(df_q)){
+  as.factor(df_q[,i])
+}
+
+#combine df_fil with the factor dataset df_q
+df_fil_total<-cbind(df_fil, df_q)
+
+#change the rest varaiables in df_fil_total
+df_fil_total <- df_fil_total %>%
+  mutate(Highest_Degree=factor(Highest_Degree, labels = c("Non-degree-granting","Certificate", "Associate", "Bachelor", "Graduate")))
+
+df_fil_total <- df_fil_total %>% 
+  mutate(Public_Private=factor(Public_Private, labels = c("Public", "Private Non Profit", "Private for Profit")))
+
+df_fil_total <- df_fil_total %>% 
+  mutate(Region = factor(Region, labels = c("US Service Schools", "New England", "Mid East", "Great Lakes", "Plains", "Southeast", "Southwest", "Rocky Mountains", "Far West", "Outlying Areas")))
+
+```
+
+```{r}
+df_fil_total$State.F <- as.factor(df_fil_total$State)
+df_fil_total$Operating_Flag <- as.logical(df_fil_total$Operating_Flag)
+df_fil_total$Hist_Black_Flag <- as.logical(df_fil_total$Hist_Black_Flag)
+df_fil_total$Pred_Black_Flag <- as.logical(df_fil_total$Pred_Black_Flag)
+df_fil_total$Alaska_Hawaiian_Flag <- as.logical(df_fil_total$Alaska_Hawaiian_Flag)
+df_fil_total$Tribal_Flag <- as.logical(df_fil_total$Tribal_Flag)
+df_fil_total$Asian_Native_American_Pacific_Flag <- as.logical(df_fil_total$Asian_Native_American_Pacific_Flag)
+df_fil_total$Hispanic_Flag <- as.logical(df_fil_total$Hispanic_Flag)
+df_fil_total$Native_NonTribal_Flag <- as.logical(df_fil_total$Native_NonTribal_Flag)
+
+```
+Irene add ends
+
+
+Now that we have converted all the variables to factors, we will select the variables that we will use to perform our Associations Rules. Below are the variables we selected.
+
+```{r}
+df_assoc <- df_fil_total %>% select(Highest_Degree,
+                                Public_Private,
+                                State.F,
+                                Region,
+                                Operating_Flag,
+                                Hist_Black_Flag,
+                                Pred_Black_Flag,
+                                Alaska_Hawaiian_Flag,
+                                Tribal_Flag,
+                                Asian_Native_American_Pacific_Flag,
+                                Hispanic_Flag,
+                                Native_NonTribal_Flag,
+                                Median_Total_Debt.F,
+                                Completed.F,
+                                Withdrawn.F,
+                                Zero_ThirtyK.F,
+                                ThirtyK_SeventyFiveK.F,
+                                SeventyFiveKplus.F,
+                                Dependent.F,
+                                Independent.F,
+                                Pell.F,
+                                notPell.F,
+                                Female.F,
+                                Male.F,
+                                FirstGen.F,
+                                NonFirstGen.F,
+                                Count_Students_Debt_Cohort.F,
+                                Count_Students_Completed.F,
+                                Count_Students_Withdrawn.F,
+                                Median_Debt_Completed_Monthly_10YR.F,
+                                Net_Tuitition.F,
+                                Total_Cost.F,
+                                Undergraduate_Count.F,
+                                Percent_UG_Federal_Loan.F)
+
+```
+
+Now we will run the associate rules on our dataset using the `apiori` function.
+
+```{r}
+rules_all = apriori(df_assoc)
+```
+
+To check to see how many rules we have created, we will use the `length` function on our `rules_all` object, which will give use the number of rules that were created, given our data.
+
+```{r}
+length(rules_all)
+```
+
+As we can see, there are 667,344 rules. We will take a look at a few rules below, however, will plan to narrow down our rules to hone our analysis.
+
+Below we will sort the rules in decending order of support, confidence, and lift. We will store these new sorted lists in new variables.
+
+```{r}
+rules.sorted.by.support = sort(rules_all, by='support')
+rules.sorted.by.confidence = sort(rules_all, by='confidence')
+rules.sorted.by.lift = sort(rules_all, by='lift')
+```
+
+Now we will examine the top 5 rules with the highest confidence.
+
+```{r}
+inspect(rules.sorted.by.confidence[1:5])
+```
+
+Now we will examine the top 10 rules with the highest support
+
+```{r}
+inspect(rules.sorted.by.support[1:10])
+```
+
+Now we will examine the top 5 rules with the highest support
+
+```{r}
+inspect(rules.sorted.by.lift[1:5])
+```
+
+Now we will modify the rules that the `apriori` command generates. Specifcally, we  will adjust the `paramater`, `appearance`, and `control`. To do this, we will first create new variables that have the values we will want to adjust.
+
+Our target variable will be `Median_Total_Debt.F` and therefore in our new object `apriori.appearance` we specify that we want the `rhs` to include `Median_Total_Debt.F = High` or `Median_Total_Debt.F = Low`.
+
+```{r}
+apriori.parameter = list(minlen=2, maxlen=3)
+apriori.control = list(verbose=FALSE)
+apriori.appearance = list(rhs=c('Median_Total_Debt.F=High',
+                                'Median_Total_Debt.F=Low'), default='lhs')
+```
+
+Now that we have created our modifcations, we will implement them by created a new set of rules. 
+
+```{r}
+rules_TotalMedianDebt = 
+  apriori(df_assoc,
+          appearance=apriori.appearance,
+          parameter=apriori.parameter,
+          control=apriori.control)
+```
+
+Now we will take a look at how many rules we have.
+
+```{r}
+length(rules_TotalMedianDebt)
+```
+
+We were able to narrow down our rules from over 600,000 to 327! Below we will sort the rules based on their support, confidence, and lift, so that we can get a better look at the factors that affect Total Median Debt. We will examine each in a section of their own.
+
+## Association Rules: Support
+
+First, we will order the rules in decending order of support. By doing this, the rules with the highest support will appear at the top of the list.
+
+```{r}
+rules.debt.sorted.by.support = sort(rules_TotalMedianDebt, by='support')
+```
+
+Below we will take a look at the rules which have the highest support.
+
+```{r}
+inspect(rules.debt.sorted.by.support[1:5])
+```
+
+As we can see here, 25% of the schools that have a high debt for first generation students also have a high median debt for all students.
+
+Now we can look at the rules that have the highest confidence.
+
+## Association Rules: Confidence
+
+Similiarly to support, we will order the rules in decending order of confidence. By doing this, the rules with the highest confidence will appear at the top of the list.
+
+```{r}
+rules.debt.sorted.by.confidence = sort(rules_TotalMedianDebt, by='confidence')
+```
+
+Below we will take a look at the rules which have the highest confidence.
+
+```{r}
+inspect(rules.debt.sorted.by.confidence[1:5])
+```
+
+As we can see here, 100% of the schools that high female and male debt, have high total median debt. (This should make sense.) 
+
+Now we can look at the rules that have the highest lift
+
+## Association Rules: Lift
+
+Lastly, we will order the rules in decending order of lift. By doing this, the rules with the highest lift will appear at the top of the list.
+
+```{r}
+rules.debt.sorted.by.lift = sort(rules_TotalMedianDebt, by='lift')
+```
+
+Below we will take a look at the rules which have the highest lift.
+
+```{r}
+inspect(rules.debt.sorted.by.lift[1:5])
+```
+
+As you will see, the order of the rules with the highest lift is exactly the same as the order of rules that have the highest confidence. Here, we can see that the number of schools that have high male and female debt in addition to high median total debt is 247% higher than we would expect if high male and female debt and high median total debt were independent for all schools in our dataset.
+# association rules vistualization--rules_TotalMedianDebt
+```{r}
+
+plot(rules_TotalMedianDebt)
+```
+```{r}
+plot(rules_TotalMedianDebt, measure=c("support","lift"), shading="confidence")
+```
+```{r}
+plot(rules_TotalMedianDebt, shading="order", control=list(main ="Two-key plot"))
+```
+
+
+```{r}
+subrules2 = head(sort(rules_TotalMedianDebt, by="lift"), 30)
+
+plot(subrules2, method="graph", control=list(type="items"))
+
+plot(subrules2, method="paracoord", control=list(reorder=TRUE))
+oneRule = sample(rules_TotalMedianDebt, 1)
+inspect(oneRule)
+```
+# Cluster analysis
+
+In addition to our Association Rules, we will before a cluster analysis to get a better understanding of the universities in our dataset.
+
+pick out 3 variables for cluster analysis
+
+#scatter plot
+"Percent_UG_Federal_Loan"
+"Median_Total_Debt"
+Total_Cost
+
+```{r}
+df_fil%>%
+  select(Percent_UG_Federal_Loan, Median_Total_Debt, Total_Cost)->df_sel
+```
+```{r}
+plot(Total_Cost~Median_Total_Debt,df_fil)
+with(df_fil,text(Total_Cost~Median_Total_Debt,pos=4, cex=.4))
+
+```
+The relationship between Debt and Federal loan is worth to investigate.
+```{r}
+
+plot(Median_Total_Debt~Percent_UG_Federal_Loan,df_fil)
+with(df_fil,text(Median_Total_Debt~Percent_UG_Federal_Loan,pos=4, cex=.4))
+```
+
+```{r}
+plot(Total_Cost~Percent_UG_Federal_Loan,df_fil)
+with(df_fil,text(Total_Cost~Percent_UG_Federal_Loan,pos=4, cex=.4))
+```
+
+##Fill the na value with mean
+1. check out the missing value
+
+```{r}
+df_sel %>% 
+   summarise_each(funs(100*mean(is.na(.))))
+```
+
+2.fill na with mean
+```{r}
+for(i in 1:ncol(df_sel)){
+df_sel[is.na(df_sel[,i]), i] <- mean(df_sel[,i], na.rm = TRUE)
+}
+```
+3.Double check if there's any missing value 
+```{r}
+df_sel %>% 
+   summarise_each(funs(100*mean(is.na(.))))
+```
+
+
+
