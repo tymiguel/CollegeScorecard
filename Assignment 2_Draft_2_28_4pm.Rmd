@@ -8,7 +8,7 @@ output: html_document
 # Introduction
 
 The College Scorecard data set contains variables about academic level, admissions rates, cost of admission and other related expenses, financial aid and loan information, student body demographics, as well as the median debt and expected earnings for students post matriculation. This data is designed to "increase transparency" of "college costs and outcomes" to help students and families make informed decisions about the cost of furthering education. 
-
+llllll
 The data provided is aggregated at the post-secondary institutional levels; there is no data available at the individual level. 
 
 # Goals
