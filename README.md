@@ -4,15 +4,9 @@ College Scorecard Analysis
 
 Analysis of College Scorecard data.
 
-1. Exploratory analysis
-2. Create hypothesis / Research question
-3. Select and clean the variables to be used
-4. Develop summarizes for the variables and describe variable relationships
-5. Perform and analysis (possibly regression)
+In this repo you will find an exploratory analysis of the College Scorecard Data including variable selection, summarization, and graphical interpretation. In addition, this analysis contain data mining techniques such as association rules and cluster anlaysis to help in grouping the institutions that are part of the original data set.
 
 College scorecard data: https://collegescorecard.ed.gov/data/
 
 Documentation Report: https://collegescorecard.ed.gov/assets/FullDataDocumentation.pdf
-
-Notes: Use 20+ variables
 
